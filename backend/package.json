@@ -1,0 +1,22 @@
+{
+  "name": "backend",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@ai-sdk/groq": "^3.0.7",
+    "@elysiajs/cors": "^1.4.1",
+    "@supabase/supabase-js": "^2.90.1",
+    "@xenova/transformers": "^2.17.2",
+    "ai": "^6.0.33",
+    "dotenv": "^17.2.3",
+    "elysia": "^1.4.22",
+    "groq-sdk": "^0.37.0"
+  }
+}
