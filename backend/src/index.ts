@@ -18,7 +18,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const app = new Elysia()
-    .use(cors())              //add the vercel URL here, .use(cors({ origin: 'https://your-frontend-name.vercel.app' }))
+    .use(cors())              //add the vercel URL here, .use(cors({ origin: 'physics-chatbot01.railway.internal' }))
     .state('model', null as any)
 .post('/chat', async ({ body, store }) => {
     // 1. Lazy-load the embedding model
@@ -65,6 +65,6 @@ const app = new Elysia()
         sources: documents?.map((d: any) => d.file_name) || []
     };
 })
-    .listen(3001);.listen(process.env.PORT || 3001);
-	
-console.log("?? BRAIN: Backend is running on http://localhost:3001");
+    .listen(process.env.PORT || 3001);
+
+console.log(`🚀 BRAIN: Backend is running on port ${process.env.PORT || 3001}`);
