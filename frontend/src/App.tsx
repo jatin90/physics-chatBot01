@@ -16,7 +16,7 @@ function App() {
     setQuestion(""); // Clear input early for better UI feel
 
     try {
-      const res = await fetch("physics-chatbot01.railway.internal", {
+      const res = await fetch("https://physics-chatbot01.railway.internal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, history: chatLog }) // Send history to backend
