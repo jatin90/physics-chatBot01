@@ -16,11 +16,15 @@ function App() {
     setQuestion(""); // Clear input early for better UI feel
 
     try {
-      const res = await fetch("https://physics-chatbot01.railway.internal", {
+      // 1. MUST start with https://
+      // 2. MUST be the public domain (not .internal)
+      // 3. MUST end with /chat
+      const res = await fetch("https://physics-chatbot01-production.up.railway.app/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, history: chatLog }) // Send history to backend
+        body: JSON.stringify({ question, history: chatLog })
       });
+      
       const data = await res.json();
       
       const assistantMessage = { role: "assistant", content: data.answer };
