@@ -19,7 +19,7 @@ function App() {
       // 1. MUST start with https://
       // 2. MUST be the public domain (not .internal)
       // 3. MUST end with /chat
-      const res = await fetch("https://physics-chatbot01-production.up.railway.app/chat", {
+      const res = await fetch("https://physics-chatbot01-production.up.railway.app", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, history: chatLog })
