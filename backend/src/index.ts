@@ -104,5 +104,4 @@ const app = new Elysia()
 console.log(`🚀 BRAIN: Backend is running on port ${process.env.PORT || 3001}`);
 
 
-
 //"qwen/qwen3-32b"
