@@ -1,64 +1,122 @@
-import { useState } from 'react'
+import { useState } from 'react';
+import './App.css';
+
+// ----------------------------------------------------------------------
+// 🔧 CONFIGURATION: PASTE YOUR RAILWAY URL HERE
+// IMPORTANT: Must start with 'https://' and end with '/chat'
+// Example: "https://physics-backend-production.up.railway.app/chat"
+// ----------------------------------------------------------------------
+const API_URL = "https://physics-chatbot01-production.up.railway.app/chat"; 
 
 function App() {
-  const [question, setQuestion] = useState("");
-  const [loading, setLoading] = useState(false);
-  // This state now holds the whole conversation
-  const [chatLog, setChatLog] = useState<{role: string, content: string}[]>([]);
+  const [input, setInput] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ role: string, content: string }[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const askPhysics = async () => {
-    if (!question.trim()) return;
-    
-    const userMessage = { role: "user", content: question };
-    const newHistory = [...chatLog, userMessage]; // Add current question to history
-    
-    setLoading(true);
-    setQuestion(""); // Clear input early for better UI feel
+  const handleSendMessage = async () => {
+    if (!input.trim()) return;
+
+    const userMessage = { role: "user", content: input };
+    setChatHistory(prev => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+    setError(null);
 
     try {
-      // 1. MUST start with https://
-      // 2. MUST be the public domain (not .internal)
-      // 3. MUST end with /chat
-      const res = await fetch("https://physics-chatbot01-production.up.railway.app", {
+      console.log(`Connecting to Brain at: ${API_URL}`);
+      
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, history: chatLog })
+        body: JSON.stringify({ 
+          question: input,
+          history: chatHistory // Send recent history for context
+        }),
       });
-      
+
+      if (!res.ok) {
+        throw new Error(`Server responded with ${res.status}`);
+      }
+
       const data = await res.json();
       
-      const assistantMessage = { role: "assistant", content: data.answer };
-      setChatLog([...newHistory, assistantMessage]); // Update log with the AI's answer
+      const botMessage = { role: "assistant", content: data.answer };
+      setChatHistory(prev => [...prev, botMessage]);
+
     } catch (err) {
-      alert("Professor is offline!");
+      console.error("Connection Failed:", err);
+      setError("The Professor is currently offline. Please check your connection.");
+      // Optional: Add a system message to the chat
+      setChatHistory(prev => [...prev, { role: "assistant", content: "⚠️ Error: I cannot reach the server right now." }]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: '600px', margin: '20px auto', display: 'flex', flexDirection: 'column', height: '90vh' }}>
-      <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #ccc', padding: '15px', borderRadius: '8px', marginBottom: '10px' }}>
-        {chatLog.map((msg, i) => (
-          <div key={i} style={{ marginBottom: '15px', textAlign: msg.role === 'user' ? 'right' : 'left' }}>
-            <div style={{ 
-              display: 'inline-block', 
-              padding: '10px', 
-              borderRadius: '10px', 
-              backgroundColor: msg.role === 'user' ? '#007bff' : '#e9ecef',
-              color: msg.role === 'user' ? 'white' : 'black',
-              maxWidth: '80%'
+    <div style={{ maxWidth: "600px", margin: "0 auto", padding: "20px", fontFamily: "Arial, sans-serif" }}>
+      <h1>⚛️ Physics Chatbot</h1>
+      
+      {/* Chat Display Area */}
+      <div style={{ 
+        border: "1px solid #ddd", 
+        borderRadius: "8px", 
+        padding: "20px", 
+        height: "400px", 
+        overflowY: "auto", 
+        marginBottom: "20px",
+        backgroundColor: "#f9f9f9"
+      }}>
+        {chatHistory.length === 0 && <p style={{color: "#888", textAlign: "center"}}>Ask me anything about Physics!</p>}
+        
+        {chatHistory.map((msg, index) => (
+          <div key={index} style={{ 
+            textAlign: msg.role === "user" ? "right" : "left", 
+            marginBottom: "10px" 
+          }}>
+            <span style={{ 
+              display: "inline-block",
+              padding: "10px 15px", 
+              borderRadius: "15px", 
+              backgroundColor: msg.role === "user" ? "#0070f3" : "#e0e0e0",
+              color: msg.role === "user" ? "white" : "black",
+              maxWidth: "80%"
             }}>
-              {msg.content.replace(/<think>[\s\S]*?<\/think>/g, "")}
-            </div>
+              {msg.content}
+            </span>
           </div>
         ))}
-        {loading && <p>Professor is thinking...</p>}
+        
+        {isLoading && <div style={{textAlign: "left", color: "#666"}}>Thinking...</div>}
       </div>
+
+      {/* Input Area */}
+      {error && <p style={{color: "red", fontSize: "0.9em"}}>{error}</p>}
       
-      <div style={{ display: 'flex', gap: '5px' }}>
-        <input style={{ flex: 1, padding: '10px' }} value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && askPhysics()} />
-        <button onClick={askPhysics} style={{ padding: '10px 20px' }}>Ask</button>
+      <div style={{ display: "flex", gap: "10px" }}>
+        <input 
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+          placeholder="Type your physics question..."
+          style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+          disabled={isLoading}
+        />
+        <button 
+          onClick={handleSendMessage}
+          disabled={isLoading}
+          style={{ 
+            padding: "10px 20px", 
+            backgroundColor: isLoading ? "#ccc" : "#0070f3", 
+            color: "white", 
+            border: "none", 
+            borderRadius: "5px", 
+            cursor: isLoading ? "not-allowed" : "pointer" 
+          }}
+        >
+          Send
+        </button>
       </div>
     </div>
   );

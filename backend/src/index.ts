@@ -32,6 +32,12 @@ console.log("🚀 System initializing...");
 
 // 4. THE APPLICATION
 const app = new Elysia()
+const app = new Elysia()
+    .use(cors({
+        origin: true, // This allows ANY website to talk to your backend
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization']
+    }))
     .use(cors()) // <--- ALLOWS VERCEL TO CONNECT
     .state('model', null as any) // Store the AI model in memory so we don't reload it every time
 
