@@ -77,6 +77,20 @@ const app = new Elysia()
             const completion = await groq.chat.completions.create({
                 messages: [
                     { 
+						// Add this system message at the start of your message array
+						const messages = [
+						  { 
+							role: "system", 
+							content: `You are an expert Physics Professor. 
+							RULES:
+							1. Only use the provided context to answer.
+							2. Respond with direct, academic explanations.
+							3. DO NOT include "Thinking...", "I am searching...", or any internal reasoning.
+							4. Use LaTeX for ALL mathematical formulas (e.g., use $E=mc^2$ or $$F=ma$$).` 
+						  },
+						  ...history, // Previous messages
+						  { role: "user", content: `Context: ${contextText}\n\nQuestion: ${question}` }
+						];
                         role: "system", 
                         content: `You are a friendly and enthusiastic High School Physics Professor. 
                         Use the following context to answer the student's question clearly. 
@@ -99,8 +113,13 @@ const app = new Elysia()
 
         } catch (err) {
             console.error("Groq Error:", err);
-            return { answer: "My brain is a bit foggy (Groq API Error). Please try again." };
-        }
+			
+			const uniqueSources = Array.from(new Set(documents?.map((d: any) => d.file_name)));
+
+			return { 
+				answer: completion.choices[0].message.content,
+				sources: uniqueSources // This sends a clean list of book titles
+			};
     })
     // 5. START SERVER
     // Railway assigns a random port in process.env.PORT. We must use it.

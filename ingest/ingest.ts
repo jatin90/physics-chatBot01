@@ -4,7 +4,6 @@ import fs from 'fs';
 import path from 'path';
 import * as dotenv from 'dotenv';
 import mammoth from 'mammoth';
-// We are using the new, compatible library here
 import pdf from 'pdf-parse-new';
 
 dotenv.config();
@@ -12,9 +11,8 @@ dotenv.config();
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
 
 async function run() {
-    console.log("🚀 LIBRARIAN: Starting up...");
+    console.log("🚀 LIBRARIAN: Opening the library gates...");
 
-    // This downloads the 80MB AI model (first time only)
     const generateEmbedding = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
 
     const docsDir = path.join(__dirname, 'docs');
@@ -25,12 +23,23 @@ async function run() {
         const ext = path.extname(file).toLowerCase();
         let text = "";
 
+        // 1. DUPLICATE CHECK: Skip if book is already in the database
+        const { data: existing } = await supabase
+            .from('doc_chunks')
+            .select('file_name')
+            .eq('file_name', file)
+            .limit(1);
+
+        if (existing && existing.length > 0) {
+            console.log(`⏩ LIBRARIAN: ${file} is already indexed. Skipping...`);
+            continue;
+        }
+
         console.log(`📖 LIBRARIAN: Reading ${file}...`);
 
         try {
             if (ext === '.pdf') {
                 const dataBuffer = fs.readFileSync(filePath);
-                // pdf-parse-new works directly as a function!
                 const data = await pdf(dataBuffer);
                 text = data.text;
             } else if (ext === '.docx') {
@@ -38,37 +47,50 @@ async function run() {
                 text = result.value;
             }
 
-            if (!text || text.trim().length < 10) {
-                console.log(`⚠️ LIBRARIAN: No text found in ${file}, skipping.`);
-                continue;
+            if (!text || text.trim().length < 10) continue;
+
+            // 2. SMARTER CHUNKING (Overlap)
+            // We take 1000 characters but overlap by 200 so concepts aren't cut off
+            const chunkSize = 1000;
+            const overlap = 200;
+            const chunks: string[] = [];
+            
+            for (let i = 0; i < text.length; i += (chunkSize - overlap)) {
+                chunks.push(text.substring(i, i + chunkSize));
             }
 
-            // Chunking: 800 characters per "knowledge piece"
-            const chunks = text.match(/[\s\S]{1,800}/g) || [];
-            console.log(`✂️ LIBRARIAN: Splitting into ${chunks.length} pieces...`);
+            console.log(`✂️ LIBRARIAN: Processing ${chunks.length} segments...`);
+
+            // 3. BATCH PROCESSING (Preparing data)
+            const rowsToInsert = [];
 
             for (let i = 0; i < chunks.length; i++) {
-                // Turn text into a vector (384 numbers)
                 const output = await generateEmbedding(chunks[i], { pooling: 'mean', normalize: true });
                 const embedding = Array.from(output.data);
 
-                const { error } = await supabase.from('doc_chunks').insert({
+                rowsToInsert.push({
                     file_name: file,
                     content: chunks[i],
                     embedding: embedding,
                     page_number: 0 
                 });
 
-                if (error) console.error("❌ DB Error:", error.message);
-                if (i % 10 === 0) process.stdout.write("."); 
+                // Insert in batches of 20 to speed things up and avoid timeouts
+                if (rowsToInsert.length === 20 || i === chunks.length - 1) {
+                    const { error } = await supabase.from('doc_chunks').insert(rowsToInsert);
+                    if (error) console.error("❌ DB Error:", error.message);
+                    rowsToInsert.length = 0; // Clear the batch
+                    process.stdout.write("."); 
+                }
             }
+            
             console.log(`\n✅ LIBRARIAN: Successfully archived ${file}`);
 
         } catch (err: any) {
             console.error(`\n❌ LIBRARIAN: Error processing ${file}: ${err.message}`);
         }
     }
-    console.log("\n🎉 SYSTEM: Warehouse is full. Ready for physics questions!");
+    console.log("\n🎉 SYSTEM: All books shelved. Ready for physics questions!");
 }
 
 run();

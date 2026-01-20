@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import './App.css';
+import 'katex/dist/katex.min.css'; // Don't forget this for the math styles!
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+
 
 // ----------------------------------------------------------------------
 // 🔧 CONFIGURATION: PASTE YOUR RAILWAY URL HERE
@@ -41,7 +46,11 @@ function App() {
 
       const data = await res.json();
       
-      const botMessage = { role: "assistant", content: data.answer };
+      const botMessage = { 
+							role: "assistant", 
+							content: data.answer,
+							sources: data.sources // Store the sources here
+							};
       setChatHistory(prev => [...prev, botMessage]);
 
     } catch (err) {
@@ -54,72 +63,44 @@ function App() {
     }
   };
 
-  return (
-    <div style={{ maxWidth: "600px", margin: "0 auto", padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      <h1>⚛️ Physics Chatbot</h1>
-      
-      {/* Chat Display Area */}
-      <div style={{ 
-        border: "1px solid #ddd", 
-        borderRadius: "8px", 
-        padding: "20px", 
-        height: "400px", 
-        overflowY: "auto", 
-        marginBottom: "20px",
-        backgroundColor: "#f9f9f9"
-      }}>
-        {chatHistory.length === 0 && <p style={{color: "#888", textAlign: "center"}}>Ask me anything about Physics!</p>}
-        
-        {chatHistory.map((msg, index) => (
-          <div key={index} style={{ 
-            textAlign: msg.role === "user" ? "right" : "left", 
-            marginBottom: "10px" 
-          }}>
-            <span style={{ 
-              display: "inline-block",
-              padding: "10px 15px", 
-              borderRadius: "15px", 
-              backgroundColor: msg.role === "user" ? "#0070f3" : "#e0e0e0",
-              color: msg.role === "user" ? "white" : "black",
-              maxWidth: "80%"
-            }}>
-              {msg.content}
-            </span>
-          </div>
-        ))}
-        
-        {isLoading && <div style={{textAlign: "left", color: "#666"}}>Thinking...</div>}
-      </div>
+return 
+	(
+		<div style={{ 
+		  padding: "12px 18px", 
+		  borderRadius: "18px", 
+		  backgroundColor: msg.role === "user" ? "#0070f3" : "#f0f2f5",
+		  color: msg.role === "user" ? "white" : "#1c1e21",
+		  maxWidth: "85%",
+		  lineHeight: "1.6"
+		}}>
+		  <ReactMarkdown 
+			remarkPlugins={[remarkMath]} 
+			rehypePlugins={[rehypeKatex]}
+		  >
+			{msg.content}
+		  </ReactMarkdown>
 
-      {/* Input Area */}
-      {error && <p style={{color: "red", fontSize: "0.9em"}}>{error}</p>}
-      
-      <div style={{ display: "flex", gap: "10px" }}>
-        <input 
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-          placeholder="Type your physics question..."
-          style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
-          disabled={isLoading}
-        />
-        <button 
-          onClick={handleSendMessage}
-          disabled={isLoading}
-          style={{ 
-            padding: "10px 20px", 
-            backgroundColor: isLoading ? "#ccc" : "#0070f3", 
-            color: "white", 
-            border: "none", 
-            borderRadius: "5px", 
-            cursor: isLoading ? "not-allowed" : "pointer" 
-          }}
-        >
-          Send
-        </button>
-      </div>
-    </div>
-  );
+		  {/* NEW: Display Sources as small tags */}
+		  {msg.sources && msg.sources.length > 0 && (
+			<div style={{ marginTop: "10px", borderTop: "1px solid #ccc", paddingTop: "5px" }}>
+			  <p style={{ fontSize: "0.75rem", fontWeight: "bold", margin: "5px 0" }}>Sources:</p>
+			  <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+				{msg.sources.map((src: string, i: number) => (
+				  <span key={i} style={{ 
+					fontSize: "0.7rem", 
+					backgroundColor: "#fff", 
+					padding: "2px 8px", 
+					borderRadius: "10px",
+					border: "1px solid #ddd"
+				  }}>
+					📖 {src}
+				  </span>
+				))}
+			  </div>
+			</div>
+			)}
+			</div>
+	);
 }
 
 export default App;
