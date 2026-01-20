@@ -85,7 +85,7 @@ const app = new Elysia()
                     ...history,
                     { role: "user", content: `Context: ${contextText}\n\nQuestion: ${question}` }
                 ],
-                model: "llama-3.3-70b-versatile",
+                model: "qwen/qwen3-32b",
                 temperature: 0.3, // Lower temperature = more factual
             });
 
