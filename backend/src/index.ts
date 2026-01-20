@@ -6,65 +6,103 @@ import Groq from 'groq-sdk';
 import * as dotenv from 'dotenv';
 import path from 'path';
 
-// This tells the script: "Look in the folder above me for the .env file"
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// 1. CONFIGURATION: Load environment variables
+// If we are NOT in production (i.e., on your laptop), load from .env file
+if (process.env.NODE_ENV !== 'production') {
+    dotenv.config({ path: path.resolve(__dirname, '../.env') });
+}
 
-if (!process.env.SUPABASE_URL) {
-    console.error("? ERROR: SUPABASE_URL is missing. Is your .env file in the 'backend' folder?");
+// 2. VALIDATION: Check if keys exist (Crucial for Railway)
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const groqApiKey = process.env.GROQ_API_KEY;
+
+if (!supabaseUrl || !supabaseKey || !groqApiKey) {
+    console.error("❌ CRITICAL ERROR: Missing Environment Variables.");
+    console.error("If on Railway: Check the 'Variables' tab.");
+    console.error("If Local: Check your .env file.");
     process.exit(1);
 }
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY!);
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// 3. INITIALIZATION: Connect to services
+const supabase = createClient(supabaseUrl, supabaseKey);
+const groq = new Groq({ apiKey: groqApiKey });
 
+console.log("🚀 System initializing...");
+
+// 4. THE APPLICATION
 const app = new Elysia()
-    .use(cors())              //add the vercel URL here, .use(cors({ origin: 'physics-chatbot01.railway.internal' }))
-    .state('model', null as any)
-.post('/chat', async ({ body, store }) => {
-    // 1. Lazy-load the embedding model
-    if (!store.model) {
-        console.log("🚀 Loading AI model...");
-        store.model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    }
+    .use(cors()) // <--- ALLOWS VERCEL TO CONNECT
+    .state('model', null as any) // Store the AI model in memory so we don't reload it every time
 
-    // Pull 'history' from the frontend body
-    const { question, history = [] } = body as { question: string, history?: any[] };
+    .post('/chat', async ({ body, store }) => {
+        const { question, history = [] } = body as { question: string, history?: any[] };
+        
+        console.log(`📝 Received Question: "${question}"`);
 
-    // 2. Vectorize the current question
-    const output = await store.model(question, { pooling: 'mean', normalize: true });
-    const embedding = Array.from(output.data);
+        // A. Load Embedding Model (Lazy Load)
+        if (!store.model) {
+            console.log("⚙️  Loading embedding model...");
+            store.model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        }
 
-    // 3. Search Database (RAG)
-    const { data: documents, error } = await supabase.rpc('match_documents', {
-        query_embedding: embedding,
-        match_threshold: 0.3,
-        match_count: 5,
-    });
+        // B. Convert User Question to Numbers (Vector)
+        const output = await store.model(question, { pooling: 'mean', normalize: true });
+        const embedding = Array.from(output.data);
 
-    if (error) return { error: error.message };
+        // C. Search Supabase (RAG)
+        const { data: documents, error } = await supabase.rpc('match_documents', {
+            query_embedding: embedding,
+            match_threshold: 0.3, // Lower threshold = more results, but maybe less relevant
+            match_count: 5,
+        });
 
-    // 4. Build Context from PDFs
-    const context = documents?.map((d: any) => d.content).join("\n---\n") || "No manual context found.";
+        if (error) {
+            console.error("Supabase Error:", error);
+            return { answer: "I'm having trouble accessing my library right now." };
+        }
 
-    // 5. Send History + Context to Groq
-    const completion = await groq.chat.completions.create({
-        messages: [
-            { 
-                role: "system", 
-                content: `You are a helpful Physics Professor. Context: ${context}. 
-                          Fluently use English and Hindi/Hinglish as requested.` 
-            },
-            ...history, // Past messages: [{role: "user", content: "..."}, {role: "assistant", content: "..."}]
-            { role: "user", content: question }
-        ],
-        model: "qwen/qwen3-32b",
-    });
+        // D. Build Context String
+        const context = documents?.map((d: any) => d.content).join("\n\n---\n\n") || "No specific textbook context found.";
+        
+        console.log(`📚 Found ${documents?.length || 0} relevant pages.`);
 
-    return { 
-        answer: completion.choices[0].message.content,
-        sources: documents?.map((d: any) => d.file_name) || []
-    };
-})
+        // E. Send to Groq (The "Professor")
+        try {
+            const completion = await groq.chat.completions.create({
+                messages: [
+                    { 
+                        role: "system", 
+                        content: `You are a friendly and enthusiastic High School Physics Professor. 
+                        Use the following context to answer the student's question clearly. 
+                        If the answer is not in the context, use your general physics knowledge but mention that it wasn't in the provided notes.
+                        
+                        Context:
+                        ${context}` 
+                    },
+                    ...history, // Include past conversation
+                    { role: "user", content: question }
+                ],
+                model: "qwen/qwen3-32b", // Powerful and fast model
+                temperature: 0.5,
+            });
+
+            return { 
+                answer: completion.choices[0].message.content,
+                sources: documents?.map((d: any) => d.file_name) || [] // Return source filenames
+            };
+
+        } catch (err) {
+            console.error("Groq Error:", err);
+            return { answer: "My brain is a bit foggy (Groq API Error). Please try again." };
+        }
+    })
+    // 5. START SERVER
+    // Railway assigns a random port in process.env.PORT. We must use it.
     .listen(process.env.PORT || 3001);
 
 console.log(`🚀 BRAIN: Backend is running on port ${process.env.PORT || 3001}`);
+
+
+
+//"qwen/qwen3-32b"
