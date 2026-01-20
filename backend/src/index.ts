@@ -43,89 +43,61 @@ const app = new Elysia()
     .post('/chat', async ({ body, store }) => {
         const { question, history = [] } = body as { question: string, history?: any[] };
         
-        console.log(`📝 Received Question: "${question}"`);
+        console.log(`📝 Question: "${question}"`);
 
-        // A. Load Embedding Model (Lazy Load)
+        // 1. Load Embedding Model
         if (!store.model) {
-            console.log("⚙️  Loading embedding model...");
             store.model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         }
 
-        // B. Convert User Question to Numbers (Vector)
+        // 2. Vectorize Question
         const output = await store.model(question, { pooling: 'mean', normalize: true });
         const embedding = Array.from(output.data);
 
-        // C. Search Supabase (RAG)
+        // 3. Search Supabase
         const { data: documents, error } = await supabase.rpc('match_documents', {
             query_embedding: embedding,
-            match_threshold: 0.3, // Lower threshold = more results, but maybe less relevant
+            match_threshold: 0.3,
             match_count: 5,
         });
 
         if (error) {
             console.error("Supabase Error:", error);
-            return { answer: "I'm having trouble accessing my library right now." };
+            return { answer: "Error accessing library.", sources: [] };
         }
 
-        // D. Build Context String
-        const context = documents?.map((d: any) => d.content).join("\n\n---\n\n") || "No specific textbook context found.";
-        
-        console.log(`📚 Found ${documents?.length || 0} relevant pages.`);
+        const contextText = documents?.map((d: any) => d.content).join("\n---\n") || "";
+        const uniqueSources = Array.from(new Set(documents?.map((d: any) => d.file_name)));
 
-        // E. Send to Groq (The "Professor")
+        // 4. Call Groq
         try {
             const completion = await groq.chat.completions.create({
                 messages: [
                     { 
-						// Add this system message at the start of your message array
-						const messages = [
-						  { 
-							role: "system", 
-							content: `You are an expert Physics Professor. 
-							RULES:
-							1. Only use the provided context to answer.
-							2. Respond with direct, academic explanations.
-							3. DO NOT include "Thinking...", "I am searching...", or any internal reasoning.
-							4. Use LaTeX for ALL mathematical formulas (e.g., use $E=mc^2$ or $$F=ma$$).` 
-						  },
-						  ...history, // Previous messages
-						  { role: "user", content: `Context: ${contextText}\n\nQuestion: ${question}` }
-						];
                         role: "system", 
-                        content: `You are a friendly and enthusiastic High School Physics Professor. 
-                        Use the following context to answer the student's question clearly. 
-                        If the answer is not in the context, use your general physics knowledge but mention that it wasn't in the provided notes.
-                        
-                        Context:
-                        ${context}` 
+                        content: `You are a Physics Professor. 
+                        RULES:
+                        1. Use the provided context to answer. 
+                        2. Use LaTeX for math ($E=mc^2$). 
+                        3. Do NOT show internal thinking or "Searching..." text.
+                        4. Be direct and academic.` 
                     },
-                    ...history, // Include past conversation
-                    { role: "user", content: question }
+                    ...history,
+                    { role: "user", content: `Context: ${contextText}\n\nQuestion: ${question}` }
                 ],
-                model: "qwen/qwen3-32b", // Powerful and fast model
-                temperature: 0.5,
+                model: "llama-3.3-70b-versatile",
+                temperature: 0.3, // Lower temperature = more factual
             });
 
             return { 
                 answer: completion.choices[0].message.content,
-                sources: documents?.map((d: any) => d.file_name) || [] // Return source filenames
+                sources: uniqueSources 
             };
 
         } catch (err) {
             console.error("Groq Error:", err);
-			
-			const uniqueSources = Array.from(new Set(documents?.map((d: any) => d.file_name)));
-
-			return { 
-				answer: completion.choices[0].message.content,
-				sources: uniqueSources // This sends a clean list of book titles
-			};
-    })
-    // 5. START SERVER
-    // Railway assigns a random port in process.env.PORT. We must use it.
-    .listen(process.env.PORT || 3001);
-
-console.log(`🚀 BRAIN: Backend is running on port ${process.env.PORT || 3001}`);
-
+            return { answer: "The Professor is tired. (Groq Error)", sources: [] };
+        }
+    }) // <--- Make sure this closing bracket and parenthesis are here!
 
 //"qwen/qwen3-32b"
