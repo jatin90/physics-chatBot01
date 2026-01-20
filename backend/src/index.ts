@@ -43,11 +43,11 @@ const app = new Elysia()
             const embedding = Array.from(output.data);
 
             // Search Supabase for the best physics matches
-            const { data: documents, error: dbError } = await supabase.rpc('match_documents', {
-                query_embedding: embedding,
-                match_threshold: 0.3,
-                match_count: 5,
-            });
+            const { data: documents, error } = await supabase.rpc('match_documents', {
+					query_embedding: embedding,
+					match_threshold: 0.3,
+					match_count: 5, // Keep this at 5 or 10. If it's 50, it might crash the RAM.
+					});
 
             if (dbError) throw dbError;
 
@@ -82,9 +82,12 @@ const app = new Elysia()
             return { answer: "The Professor is having trouble thinking. (Error)", sources: [] };
         }
     })
-    // 3. LISTEN (This is what keeps Railway running)
-    .listen(process.env.PORT || 3001);
+		// 1. Add a simple root route for the Healthcheck
+			.get('/', () => ({ status: "Professor is Awake", version: "1.0.0" }))
 
-console.log(`🚀 BRAIN: Backend is running on port ${app.server?.port}`);
+			// 2. Use the dynamic PORT variable
+			.listen(process.env.PORT || 3001, ({ hostname, port }) => {
+				console.log(`🚀 BRAIN: Physics Professor is live at http://${hostname}:${port}`);
+			});
 
 //"qwen/qwen3-32b"
